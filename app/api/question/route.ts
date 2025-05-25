@@ -1,9 +1,8 @@
-// app/api/question/route.js (or route.ts if using TypeScript)
-
 import { NextResponse } from "next/server";
-import clientPromise from "../../../lib/mongodb"; // adjust path as needed
+import { NextRequest } from "next/server"; // Import the NextRequest type
+import clientPromise from "../../../lib/mongodb"; // Adjust path as needed
 
-export async function POST(request) {
+export async function POST(request: NextRequest) { // Type the request parameter
   try {
     const { question1, question2, question3 } = await request.json();
 
