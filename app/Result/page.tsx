@@ -5,7 +5,32 @@ import { useRouter } from "next/navigation";
 import Logo from "../Component/logo";
 import { useEffect, useState } from "react";
 import { PropagateLoader } from "react-spinners";
-import { div } from "framer-motion/client";
+
+// --- TYPES ---
+type STTWord = {
+  word: string;
+  startTime: number;
+  endTime: number;
+};
+
+type IELTSMetric = {
+  speech_rate_wpm: number;
+  articulation_rate_wpm: number;
+  pause_count: number;
+  mean_pause_duration: number;
+  filler_word_count: number;
+  repetition_count: number;
+  grammar_errors: string[];
+  vocab_richness: number;
+  duration_seconds: number;
+};
+
+type SectionResult = {
+  question: string;
+  answer_transcript: string;
+  words: STTWord[];
+  metrics: IELTSMetric;
+};
 
 const MotionDiv = dynamic(
   () => import("framer-motion").then((mod) => mod.motion.div),
@@ -34,7 +59,7 @@ const patternSvg = `
   </svg>
 `;
 
-const metricLabels: Record<string, string> = {
+const metricLabels: Record<keyof IELTSMetric, string> = {
   speech_rate_wpm: "Speech Rate (wpm)",
   articulation_rate_wpm: "Articulation Rate (wpm)",
   pause_count: "Pauses (#)",
@@ -48,7 +73,7 @@ const metricLabels: Record<string, string> = {
 
 const Result = () => {
   const router = useRouter();
-  const [sections, setSections] = useState<any[]>([]);
+  const [sections, setSections] = useState<SectionResult[]>([]);
   const [geminiResult, setGeminiResult] = useState<string>("");
 
   useEffect(() => {
@@ -97,7 +122,6 @@ Overall Band: X – [Summary and improvement advice]
               json.candidates?.[0]?.content?.parts?.[0]?.text ||
               json.result ||
               "No result";
-            console.log(json.result)
             setGeminiResult(answer);
           })
           .catch(() => setGeminiResult("Evaluation failed."));
@@ -112,16 +136,17 @@ Overall Band: X – [Summary and improvement advice]
     const sum = sections.reduce((acc, s) => {
       Object.entries(s.metrics).forEach(([k, v]) => {
         // Only average number metrics
-        if (typeof v === "number") acc[k] = (acc[k] || 0) + v;
+        if (typeof v === "number") acc[k as keyof IELTSMetric] = (acc[k as keyof IELTSMetric] || 0) + v;
       });
       return acc;
-    }, {} as Record<string, number>);
-    const avg: Record<string, any> = {};
+    }, {} as Partial<Record<keyof IELTSMetric, number>>);
+    const avg: Partial<Record<keyof IELTSMetric, string>> = {};
     Object.entries(sum).forEach(([k, v]) => {
-      avg[k] = (v / sections.length).toFixed(2);
+      avg[k as keyof IELTSMetric] = (v / sections.length).toFixed(2);
     });
     return avg;
   })();
+
   return (
     <div className="bg-[#0A1E2E] min-h-screen flex flex-col items-center justify-center px-4 py-8">
       <Logo />
@@ -179,10 +204,10 @@ Overall Band: X – [Summary and improvement advice]
               </h3>
               <ul className="text-black text-sm">
                 {Object.entries(metricLabels).map(([k, label]) =>
-                  k !== "grammar_errors" && overall[k] !== undefined ? (
+                  k !== "grammar_errors" && overall[k as keyof IELTSMetric] !== undefined ? (
                     <li key={k}>
                       <span className="font-semibold">{label}:</span>{" "}
-                      {overall[k]}
+                      {overall[k as keyof IELTSMetric]}
                     </li>
                   ) : null
                 )}
@@ -202,7 +227,7 @@ Overall Band: X – [Summary and improvement advice]
                   <b>Transcript:</b> {section.answer_transcript}
                 </div>
                 <ul className="text-xs mb-1">
-                  {section.words.map((w: any, i: number) => (
+                  {section.words.map((w: STTWord, i: number) => (
                     <li key={i}>
                       {w.word}: {w.startTime.toFixed(2)}s -{" "}
                       {w.endTime.toFixed(2)}s
@@ -215,13 +240,13 @@ Overall Band: X – [Summary and improvement advice]
                     {Object.entries(metricLabels).map(([k, label]) => {
                       if (
                         k === "grammar_errors" &&
-                        section.metrics[k]?.length > 0
+                        (section.metrics[k as keyof IELTSMetric] as string[])?.length > 0
                       ) {
                         return (
                           <li key={k}>
                             <span className="font-semibold">{label}:</span>
                             <ul className="ml-5 list-disc">
-                              {section.metrics[k].map(
+                              {(section.metrics[k as keyof IELTSMetric] as string[]).map(
                                 (err: string, i: number) => (
                                   <li key={i}>{err}</li>
                                 )
@@ -235,11 +260,11 @@ Overall Band: X – [Summary and improvement advice]
                             <span className="font-semibold">{label}:</span> None
                           </li>
                         );
-                      } else if (section.metrics[k] !== undefined) {
+                      } else if (section.metrics[k as keyof IELTSMetric] !== undefined) {
                         return (
                           <li key={k}>
                             <span className="font-semibold">{label}:</span>{" "}
-                            {section.metrics[k]}
+                            {section.metrics[k as keyof IELTSMetric]}
                           </li>
                         );
                       }

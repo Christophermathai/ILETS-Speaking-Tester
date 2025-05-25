@@ -1,19 +1,19 @@
-// lib/mongodb.js
-import { MongoClient } from "mongodb";
+import { MongoClient, MongoClientOptions } from "mongodb";
 
-// Example: With authentication
 const uri = "mongodb://admin:123@localhost:27017/?authSource=admin";
+const options: MongoClientOptions = {};
 
-const options = {};
+declare global {
+  // eslint-disable-next-line no-var
+  var _mongoClientPromise: Promise<MongoClient> | undefined;
+}
 
-let client;
-let clientPromise;
+let client: MongoClient;
 
 if (!global._mongoClientPromise) {
   client = new MongoClient(uri, options);
   global._mongoClientPromise = client.connect();
 }
-clientPromise = global._mongoClientPromise;
-
+const clientPromise = global._mongoClientPromise!;
 
 export default clientPromise;
