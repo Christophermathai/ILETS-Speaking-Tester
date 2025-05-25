@@ -3,7 +3,49 @@ import dynamic from "next/dynamic";
 import Logo from "../Component/logo";
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import nlp from "compromise"; // npm install compromise
+import nlp from "compromise";
+
+// ---- TYPES ----
+
+type STTWord = {
+  word: string;
+  startTime: number;
+  endTime: number;
+};
+
+type STTResult = {
+  transcript: string;
+  words: STTWord[];
+};
+
+type IELTSMetric = {
+  speech_rate_wpm: number;
+  pause_count: number;
+  mean_pause_duration: number;
+  filler_word_count: number;
+  duration_seconds: number;
+  articulation_rate_wpm: number;
+  repetition_count: number;
+  grammar_errors: string[];
+  vocab_richness: number;
+};
+
+type SectionResult = {
+  question: string;
+  answer_transcript: string;
+  words: STTWord[];
+  metrics: IELTSMetric;
+};
+
+type SessionQuestions = {
+  question1: string;
+  question2: string;
+  question3: string;
+};
+
+type SessionApiResponse = {
+  questions: SessionQuestions;
+};
 
 // --- AUDIO HELPERS (INLINE) ---
 
@@ -11,11 +53,11 @@ function encodeWAV(samples: Float32Array, sampleRate: number): Blob {
   const buffer = new ArrayBuffer(44 + samples.length * 2);
   const view = new DataView(buffer);
 
-  function writeString(view: DataView, offset: number, string: string) {
+  const writeString = (view: DataView, offset: number, string: string) => {
     for (let i = 0; i < string.length; i++) {
       view.setUint8(offset + i, string.charCodeAt(i));
     }
-  }
+  };
 
   writeString(view, 0, "RIFF");
   view.setUint32(4, 36 + samples.length * 2, true);
@@ -33,7 +75,7 @@ function encodeWAV(samples: Float32Array, sampleRate: number): Blob {
 
   let offset = 44;
   for (let i = 0; i < samples.length; i++, offset += 2) {
-    let s = Math.max(-1, Math.min(1, samples[i]));
+    const s = Math.max(-1, Math.min(1, samples[i]));
     view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
   }
 
@@ -58,7 +100,7 @@ function resampleTo16kHz(
   return result;
 }
 
-async function wavBlobToBase64(wavBlob: Blob): Promise<string> {
+const wavBlobToBase64 = async (wavBlob: Blob): Promise<string> => {
   const arrayBuffer = await wavBlob.arrayBuffer();
   let binary = "";
   const bytes = new Uint8Array(arrayBuffer);
@@ -66,12 +108,9 @@ async function wavBlobToBase64(wavBlob: Blob): Promise<string> {
     binary += String.fromCharCode(bytes[i]);
   }
   return btoa(binary);
-}
+};
 
-async function sendWavToSTT(wavBlob: Blob): Promise<{
-  transcript: string;
-  words: { word: string; startTime: number; endTime: number }[];
-}> {
+const sendWavToSTT = async (wavBlob: Blob): Promise<STTResult> => {
   const audioBase64 = await wavBlobToBase64(wavBlob);
 
   const res = await fetch("/api/Conversion/speech-to-text", {
@@ -85,20 +124,20 @@ async function sendWavToSTT(wavBlob: Blob): Promise<{
     }),
   });
 
-  const data = await res.json();
+  const data: STTResult = await res.json();
 
   return {
     transcript: data.transcript ?? "",
     words: data.words ?? [],
   };
-}
+};
 
 // --- IELTS SPEAKING METRICS HELPERS ---
 
 function calcIELTSMetrics(
   transcript: string,
-  words: { word: string; startTime: number; endTime: number }[]
-) {
+  words: STTWord[]
+): IELTSMetric | null {
   if (!words || words.length === 0) return null;
 
   // Duration
@@ -128,9 +167,9 @@ function calcIELTSMetrics(
     speakingTime > 0 ? totalWords / (speakingTime / 60) : 0;
 
   // Filler words
-  const fillerWords = ["um", "uh", "erm", "like", "you know"];
+  const fillerWords = ["um", "uh", "erm", "like", "you know"] as const;
   const fillerWordCount = words.filter((w) =>
-    fillerWords.includes(w.word.toLowerCase())
+    fillerWords.includes(w.word.toLowerCase() as typeof fillerWords[number])
   ).length;
 
   // Repetition Count
@@ -138,7 +177,7 @@ function calcIELTSMetrics(
   const terms = doc
     .terms()
     .out("array")
-    .map((w) => w.toLowerCase());
+    .map((w: string) => w.toLowerCase());
   let repetitionCount = 0;
   for (let i = 1; i < terms.length; i++) {
     if (terms[i] === terms[i - 1]) repetitionCount++;
@@ -151,7 +190,7 @@ function calcIELTSMetrics(
   // Grammar errors: sentences without verbs (list them)
   const sentences = doc.sentences();
   const grammarErrorSentences: string[] = [];
-  sentences.forEach((s) => {
+  sentences.forEach((s: Record<string, any>) => {
     if (s.verbs().length === 0) grammarErrorSentences.push(s.out("text"));
   });
 
@@ -163,12 +202,12 @@ function calcIELTSMetrics(
     duration_seconds: Number(duration.toFixed(2)),
     articulation_rate_wpm: Math.round(articulationRate),
     repetition_count: repetitionCount,
-    grammar_errors: grammarErrorSentences, // <-- now an array of problematic sentences
+    grammar_errors: grammarErrorSentences,
     vocab_richness: Number(vocabRichness.toFixed(2)),
   };
 }
 
-// Framer Motion
+// Framer Motion (dynamic import for SSR)
 const MotionDiv = dynamic(
   () => import("framer-motion").then((mod) => mod.motion.div),
   { ssr: false }
@@ -180,21 +219,19 @@ const MotionButton = dynamic(
 
 export default function Test() {
   const [question, setQuestion] = useState<string[]>(["", "", ""]);
-  const [index, setIndex] = useState(0);
-  const [time, setTime] = useState(0);
-  const [isRunning, setIsRunning] = useState(false);
-  const [donerecorde, setDonerecorde] = useState(false);
+  const [index, setIndex] = useState<number>(0);
+  const [time, setTime] = useState<number>(0);
+  const [isRunning, setIsRunning] = useState<boolean>(false);
+  const [donerecorde, setDonerecorde] = useState<boolean>(false);
   const router = useRouter();
 
-  const [recording, setRecording] = useState(false);
+  const [recording, setRecording] = useState<boolean>(false);
   const [wavUrl, setWavUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [sttResult, setSttResult] = useState<{
-    transcript: string;
-    words: any[];
-  } | null>(null);
-  const [metrics, setMetrics] = useState<any>(null);
-  const [sessionResults, setSessionResults] = useState<any[]>([]);
+  const [sttResult, setSttResult] = useState<STTResult | null>(null);
+  const [metrics, setMetrics] = useState<IELTSMetric | null>(null);
+  const [sessionResults, setSessionResults] = useState<SectionResult[]>([]);
+  // Use inferred types from useRef, no explicit MutableRefObject usage:
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const wavBlobRef = useRef<Blob | null>(null);
@@ -202,7 +239,7 @@ export default function Test() {
   useEffect(() => {
     const fetchSessionData = async () => {
       const res = await fetch("/api/session/get");
-      const data = await res.json();
+      const data: SessionApiResponse = await res.json();
       setQuestion([
         data.questions.question1,
         data.questions.question2,
@@ -236,9 +273,8 @@ export default function Test() {
   const reset = () => setTime(0);
 
   const handleStartAgain = () => {
-    // Store current section result in sessionResults
     if (sttResult && metrics) {
-      const sectionObj = {
+      const sectionObj: SectionResult = {
         question: question[index],
         answer_transcript: sttResult.transcript,
         words: sttResult.words,
@@ -255,12 +291,12 @@ export default function Test() {
     setSttResult(null);
     setMetrics(null);
     wavBlobRef.current = null;
+    setDonerecorde(false);
   };
 
   const submit = () => {
-    // Store last section
     if (sttResult && metrics) {
-      const sectionObj = {
+      const sectionObj: SectionResult = {
         question: question[index],
         answer_transcript: sttResult.transcript,
         words: sttResult.words,
@@ -268,7 +304,6 @@ export default function Test() {
       };
       setSessionResults((prev) => {
         const allSections = [...prev, sectionObj];
-        // Save allSections to sessionStorage for next page
         if (typeof window !== "undefined") {
           sessionStorage.setItem("ielts_sections", JSON.stringify(allSections));
         }
@@ -289,7 +324,7 @@ export default function Test() {
       y: 0,
       transition: { duration: 0.5, ease: "easeOut", staggerChildren: 0.2 },
     },
-  };
+  } as const;
 
   const startRecording = async () => {
     setError(null);
@@ -326,8 +361,8 @@ export default function Test() {
           const buffer = await blob.arrayBuffer();
           const audioCtx = new window.AudioContext();
           const audioBuffer = await audioCtx.decodeAudioData(buffer);
-          let channelData = new Float32Array(audioBuffer.getChannelData(0));
-          let resampled = resampleTo16kHz(channelData, audioBuffer.sampleRate);
+          const channelData = new Float32Array(audioBuffer.getChannelData(0));
+          const resampled = resampleTo16kHz(channelData, audioBuffer.sampleRate);
           const wavBlob = encodeWAV(resampled, 16000);
           wavBlobRef.current = wavBlob;
           const url = URL.createObjectURL(wavBlob);
@@ -342,7 +377,7 @@ export default function Test() {
           setMetrics(metricsObj);
         } catch (err) {
           setError(
-            "Could not decode or transcribe recording. Please try again."
+            `Could not decode or transcribe recording. Please try again. Error : ${err}`
           );
         }
 
@@ -354,7 +389,7 @@ export default function Test() {
 
       mediaRecorderRef.current.start();
     } catch (err) {
-      alert("Microphone permission denied or not available.");
+      alert(`Microphone permission denied or not available due ${err}`);
       setRecording(false);
     }
   };
@@ -410,7 +445,7 @@ export default function Test() {
                 className="self-end mt-6 px-6 py-3 bg-black text-white rounded-full disabled:bg-transparent hover:bg-gray-800 transition-colors text-base sm:text-lg"
                 onClick={recording ? stopRecording : startRecording}
                 variants={sectionVariants}
-                disabled={donerecorde} // 👈 your logic here
+                disabled={donerecorde}
               >
                 {recording ? "Stop" : "Start"}
               </MotionButton>
@@ -445,7 +480,7 @@ export default function Test() {
                     <b>Transcript:</b> {sttResult.transcript}
                   </p>
                   <ul>
-                    {sttResult.words.map((w: any, i: number) => (
+                    {sttResult.words.map((w: STTWord, i: number) => (
                       <li key={i}>
                         {w.word}: {w.startTime.toFixed(2)}s -{" "}
                         {w.endTime.toFixed(2)}s
