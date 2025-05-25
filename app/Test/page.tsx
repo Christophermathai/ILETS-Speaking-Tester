@@ -190,7 +190,7 @@ function calcIELTSMetrics(
   // Grammar errors: sentences without verbs (list them)
   const sentences = doc.sentences();
   const grammarErrorSentences: string[] = [];
-  sentences.forEach((s: Record<string, any>) => {
+  sentences.forEach((s: Record<string,any>) => {
     if (s.verbs().length === 0) grammarErrorSentences.push(s.out("text"));
   });
 
@@ -236,6 +236,7 @@ export default function Test() {
   const audioChunksRef = useRef<Blob[]>([]);
   const wavBlobRef = useRef<Blob | null>(null);
 
+  console.log(sessionResults);
   useEffect(() => {
     const fetchSessionData = async () => {
       const res = await fetch("/api/session/get");
