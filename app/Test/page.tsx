@@ -47,6 +47,7 @@ type SessionApiResponse = {
   questions: SessionQuestions;
 };
 
+
 // --- AUDIO HELPERS (INLINE) ---
 
 function encodeWAV(samples: Float32Array, sampleRate: number): Blob {
@@ -188,10 +189,10 @@ function calcIELTSMetrics(
   const vocabRichness = terms.length > 0 ? uniqueWords.size / terms.length : 0;
 
   // Grammar errors: sentences without verbs (list them)
-  const sentences = doc.sentences();
+  const sentencesData = doc.sentences().json(); // Extract sentence details
   const grammarErrorSentences: string[] = [];
-  sentences.forEach((s: Record<string,any>) => {
-    if (s.verbs().length === 0) grammarErrorSentences.push(s.out("text"));
+  sentencesData.forEach((s: { text: string; verbs: string[] }) => {
+    if (s.verbs.length === 0) grammarErrorSentences.push(s.text);
   });
 
   return {
@@ -206,7 +207,6 @@ function calcIELTSMetrics(
     vocab_richness: Number(vocabRichness.toFixed(2)),
   };
 }
-
 // Framer Motion (dynamic import for SSR)
 const MotionDiv = dynamic(
   () => import("framer-motion").then((mod) => mod.motion.div),
