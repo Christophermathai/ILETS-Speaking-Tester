@@ -1,9 +1,12 @@
 import { NextRequest } from "next/server";
 import { SpeechClient } from "@google-cloud/speech";
 
-const client = new SpeechClient({
-  keyFilename: "gen-lang-client-0194573509-78372063deb0.json",
-});
+function getClient() {
+  const b64 = process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64;
+  if (!b64) throw new Error("Google credentials missing");
+  const creds = JSON.parse(Buffer.from(b64, "base64").toString("utf-8"));
+  return new SpeechClient({ credentials: creds });
+}
 
 function parseTime(ts: any): number {
   if (!ts) return 0;
@@ -21,6 +24,8 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { audio, encoding, sampleRateHertz, languageCode } = body;
+
+    const client = getClient();
 
     const req = {
       audio: { content: audio },
