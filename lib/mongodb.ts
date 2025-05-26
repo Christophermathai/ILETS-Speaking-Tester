@@ -1,6 +1,6 @@
 import { MongoClient, MongoClientOptions } from "mongodb";
 
-const uri = "mongodb://admin:123@localhost:27017/?authSource=admin";
+const uri = process.env.MONGODB_URI;
 const options: MongoClientOptions = {};
 
 declare global {
