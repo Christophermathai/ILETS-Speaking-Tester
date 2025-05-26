@@ -54,6 +54,9 @@ export async function POST(request: NextRequest): Promise<Response> {
     const { audio, encoding, sampleRateHertz, languageCode } = body;
 
     const client = getClient();
+    if(audio){
+      console.log("Audio tranfered");
+    }
 
     const req: protos.google.cloud.speech.v1.IRecognizeRequest = {
       audio: { content: audio },

@@ -126,7 +126,6 @@ const sendWavToSTT = async (wavBlob: Blob): Promise<STTResult> => {
   });
 
   const data: STTResult = await res.json();
-
   return {
     transcript: data.transcript ?? "",
     words: data.words ?? [],
@@ -187,13 +186,16 @@ function calcIELTSMetrics(
   // Vocabulary richness
   const uniqueWords = new Set(terms);
   const vocabRichness = terms.length > 0 ? uniqueWords.size / terms.length : 0;
+console.log("hello");
+const sentencesData = doc.sentences().json(); // Extract sentence details
+const grammarErrorSentences: string[] = [];
 
-  // Grammar errors: sentences without verbs (list them)
-  const sentencesData = doc.sentences().json(); // Extract sentence details
-  const grammarErrorSentences: string[] = [];
-  sentencesData.forEach((s: { text: string; verbs: string[] }) => {
-    if (s.verbs.length === 0) grammarErrorSentences.push(s.text);
-  });
+sentencesData.forEach((s: { text: string; verbs?: string[] }) => {
+  if (s.verbs && s.verbs.length === 0) {
+    grammarErrorSentences.push(s.text);
+  }
+});
+  console.log("hello");
 
   return {
     speech_rate_wpm: Math.round(speechRate),
@@ -327,7 +329,7 @@ export default function Test() {
     },
   } as const;
 
-  const startRecording = async () => {
+const startRecording = async () => {
     setError(null);
     setSttResult(null);
     setMetrics(null);
@@ -375,6 +377,7 @@ export default function Test() {
           setSttResult(result);
           setDonerecorde(true);
           const metricsObj = calcIELTSMetrics(result.transcript, result.words);
+          console.log(metricsObj);
           setMetrics(metricsObj);
         } catch (err) {
           setError(
@@ -395,7 +398,7 @@ export default function Test() {
     }
   };
 
-  const stopRecording = () => {
+const stopRecording = () => {
     if (
       mediaRecorderRef.current &&
       mediaRecorderRef.current.state !== "inactive"
