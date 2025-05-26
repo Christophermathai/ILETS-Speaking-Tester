@@ -95,15 +95,7 @@ export default function Homme() {
         throw new Error("Failed to set session");
       }
 
-      const res_db = await fetch("/api/question", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question1, question2, question3 }),
-      });
-
-      const data = await res_db.json();
-
-      if (res_session.ok && res_db.ok) {
+      if (res_session.ok) {
         setMessage("Questions saved successfully!");
         alert("Test is going to start");
         setQuestion1("");
@@ -111,7 +103,7 @@ export default function Homme() {
         setQuestion3("");
         router.push("/Test");
       } else {
-        setMessage(data.error || "Failed to save questions.");
+        setMessage("Failed to save questions.");
       }
     } catch (error) {
       setMessage(`Something went wrong: ${error instanceof Error ? error.message : 'Unknown error'}`);
