@@ -1,5 +1,11 @@
 import dynamic from "next/dynamic";
+// import { Major_Mono_Display } from "next/font/google";
 
+// const majorMono = Major_Mono_Display({
+//   subsets: ['latin'],
+//   weight: '400',
+//   display: 'swap',
+// });
 // Dynamically import Framer Motion to avoid SSR issues in Next.js
 const MotionH1 = dynamic(
   () => import("framer-motion").then((mod) => mod.motion.h1),
@@ -7,7 +13,7 @@ const MotionH1 = dynamic(
 );
 
 // Import Major Mono Display font (assumed to be added in the project via Google Fonts in _document.js or CSS)
-const majorMonoFont = "'Major Mono Display', monospace";
+
 
 export default function Logo() {
   const containerVariants = {
@@ -21,12 +27,13 @@ export default function Logo() {
 
   return (
     <MotionH1
-      className="text-2xl sm:text-3xl md:text-4xl font-bold mb-6 sm:mb-8"
-      style={{ fontFamily: majorMonoFont }}
+      className={`text-2xl sm:text-3xl md:text-4xl font-bold mb-6 sm:mb-8`}
+      style={{ fontFamily: 'MyFont' }}
       initial="hidden"
       animate="visible"
       variants={containerVariants}
     >
+      
       <span className="text-[#00D4FF]">BAND</span>BOOSTER
     </MotionH1>
   );

@@ -1,24 +1,27 @@
 "use client";
+
 import dynamic from "next/dynamic";
 import Logo from "../Component/logo";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { PropagateLoader } from "react-spinners";
+import { motion } from "framer-motion";
 import nlp from "compromise";
 
 // ---- TYPES ----
 
-type STTWord = {
+interface STTWord {
   word: string;
   startTime: number;
   endTime: number;
-};
+}
 
-type STTResult = {
+interface STTResult {
   transcript: string;
   words: STTWord[];
-};
+}
 
-type IELTSMetric = {
+interface IELTSMetric {
   speech_rate_wpm: number;
   pause_count: number;
   mean_pause_duration: number;
@@ -28,27 +31,26 @@ type IELTSMetric = {
   repetition_count: number;
   grammar_errors: string[];
   vocab_richness: number;
-};
+}
 
-type SectionResult = {
+interface SectionResult {
   question: string;
   answer_transcript: string;
   words: STTWord[];
   metrics: IELTSMetric;
-};
+}
 
-type SessionQuestions = {
+interface SessionQuestions {
   question1: string;
   question2: string;
   question3: string;
-};
+}
 
-type SessionApiResponse = {
+interface SessionApiResponse {
   questions: SessionQuestions;
-};
+}
 
-
-// --- AUDIO HELPERS (INLINE) ---
+// --- AUDIO HELPERS ---
 
 function encodeWAV(samples: Float32Array, sampleRate: number): Blob {
   const buffer = new ArrayBuffer(44 + samples.length * 2);
@@ -169,7 +171,7 @@ function calcIELTSMetrics(
   // Filler words
   const fillerWords = ["um", "uh", "erm", "like", "you know"] as const;
   const fillerWordCount = words.filter((w) =>
-    fillerWords.includes(w.word.toLowerCase() as typeof fillerWords[number])
+    fillerWords.includes(w.word.toLowerCase() as (typeof fillerWords)[number])
   ).length;
 
   // Repetition Count
@@ -186,16 +188,15 @@ function calcIELTSMetrics(
   // Vocabulary richness
   const uniqueWords = new Set(terms);
   const vocabRichness = terms.length > 0 ? uniqueWords.size / terms.length : 0;
-console.log("hello");
-const sentencesData = doc.sentences().json(); // Extract sentence details
-const grammarErrorSentences: string[] = [];
 
-sentencesData.forEach((s: { text: string; verbs?: string[] }) => {
-  if (s.verbs && s.verbs.length === 0) {
-    grammarErrorSentences.push(s.text);
-  }
-});
-  console.log("hello");
+  const sentencesData = doc.sentences().json();
+  const grammarErrorSentences: string[] = [];
+
+  sentencesData.forEach((s: { text: string; verbs?: string[] }) => {
+    if (s.verbs && s.verbs.length === 0) {
+      grammarErrorSentences.push(s.text);
+    }
+  });
 
   return {
     speech_rate_wpm: Math.round(speechRate),
@@ -209,6 +210,7 @@ sentencesData.forEach((s: { text: string; verbs?: string[] }) => {
     vocab_richness: Number(vocabRichness.toFixed(2)),
   };
 }
+
 // Framer Motion (dynamic import for SSR)
 const MotionDiv = dynamic(
   () => import("framer-motion").then((mod) => mod.motion.div),
@@ -220,46 +222,86 @@ const MotionButton = dynamic(
 );
 
 export default function Test() {
+  const router = useRouter();
   const [question, setQuestion] = useState<string[]>(["", "", ""]);
   const [index, setIndex] = useState<number>(0);
   const [time, setTime] = useState<number>(0);
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [donerecorde, setDonerecorde] = useState<boolean>(false);
-  const router = useRouter();
-
   const [recording, setRecording] = useState<boolean>(false);
   const [wavUrl, setWavUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sttResult, setSttResult] = useState<STTResult | null>(null);
   const [metrics, setMetrics] = useState<IELTSMetric | null>(null);
   const [sessionResults, setSessionResults] = useState<SectionResult[]>([]);
-  // Use inferred types from useRef, no explicit MutableRefObject usage:
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [currentPhraseIndex, setCurrentPhraseIndex] = useState<number>(0);
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const wavBlobRef = useRef<Blob | null>(null);
-
   console.log(sessionResults);
+  const phrases = [
+    "Brewing the test…",
+    "Warming up your grammar engines…",
+    "Preparing your vocabulary arsenal…",
+    "Proofreading your readiness…",
+    "Aligning syntax and semantics…",
+    "Building your comprehension power…",
+    "Crafting perfect paragraphs…",
+    "Lighting up your language neurons…",
+    "Gathering your lexical gems…",
+    "Loading the language challenge…",
+  ];
+
+  // Cycle through phrases during loading
+  useEffect(() => {
+    let interval: NodeJS.Timeout | undefined;
+    if (isLoading) {
+      interval = setInterval(() => {
+        setCurrentPhraseIndex((prevIndex) => (prevIndex + 1) % phrases.length);
+      }, 2000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isLoading, phrases.length]);
+
+  // Fetch session questions
   useEffect(() => {
     const fetchSessionData = async () => {
-      const res = await fetch("/api/session/get");
-      const data: SessionApiResponse = await res.json();
-      setQuestion([
-        data.questions.question1,
-        data.questions.question2,
-        data.questions.question3,
-      ]);
+      try {
+        const res = await fetch("/api/session/get");
+        if (!res.ok) throw new Error("Failed to fetch session data");
+        const data: SessionApiResponse = await res.json();
+        setQuestion([
+          data.questions.question1,
+          data.questions.question2,
+          data.questions.question3,
+        ]);
+      } catch (err) {
+        setError(
+          `Failed to load questions: ${
+            err instanceof Error ? err.message : "Unknown error"
+          }`
+        );
+      }
     };
     fetchSessionData();
   }, []);
 
+  // Timer logic
   useEffect(() => {
     let intervalId: NodeJS.Timeout | undefined;
     if (isRunning) {
       intervalId = setInterval(() => setTime((prev) => prev + 1), 10);
     }
-    return () => intervalId && clearInterval(intervalId);
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
   }, [isRunning]);
 
+  // Cleanup audio resources
   useEffect(() => {
     return () => {
       if (wavUrl) URL.revokeObjectURL(wavUrl);
@@ -272,6 +314,11 @@ export default function Test() {
       } catch {}
     };
   }, [wavUrl]);
+
+  const phraseVariants = {
+    hidden: { opacity: 0, y: 10 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.5 } },
+  };
 
   const reset = () => setTime(0);
 
@@ -316,20 +363,7 @@ export default function Test() {
     router.push("/Result");
   };
 
-  const minutes = Math.floor((time % 360000) / 6000);
-  const seconds = Math.floor((time % 6000) / 100);
-  const milliseconds = time % 100;
-
-  const sectionVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: {
-      opacity: 1,
-      y: 0,
-      transition: { duration: 0.5, ease: "easeOut", staggerChildren: 0.2 },
-    },
-  } as const;
-
-const startRecording = async () => {
+  const startRecording = async () => {
     setError(null);
     setSttResult(null);
     setMetrics(null);
@@ -341,7 +375,7 @@ const startRecording = async () => {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { channelCount: 1 },
       });
-      mediaRecorderRef.current = new window.MediaRecorder(stream);
+      mediaRecorderRef.current = new MediaRecorder(stream);
       audioChunksRef.current = [];
 
       mediaRecorderRef.current.onstart = () => {
@@ -358,34 +392,47 @@ const startRecording = async () => {
       mediaRecorderRef.current.onstop = async () => {
         setRecording(false);
         setIsRunning(false);
+        setIsLoading(true);
+        const timeout = setTimeout(() => {
+          setIsLoading(false);
+          setError("Transcription timed out. Please try again.");
+        }, 10000);
+
         try {
           const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
           audioChunksRef.current = [];
           const buffer = await blob.arrayBuffer();
-          const audioCtx = new window.AudioContext();
+          const audioCtx = new AudioContext();
           const audioBuffer = await audioCtx.decodeAudioData(buffer);
           const channelData = new Float32Array(audioBuffer.getChannelData(0));
-          const resampled = resampleTo16kHz(channelData, audioBuffer.sampleRate);
+          const resampled = resampleTo16kHz(
+            channelData,
+            audioBuffer.sampleRate
+          );
           const wavBlob = encodeWAV(resampled, 16000);
           wavBlobRef.current = wavBlob;
           const url = URL.createObjectURL(wavBlob);
           setWavUrl(url);
           audioCtx.close();
 
-          // *** Automatic Transcribe & Score ***
+          // Automatic Transcribe & Score
           const result = await sendWavToSTT(wavBlob);
           setSttResult(result);
           setDonerecorde(true);
           const metricsObj = calcIELTSMetrics(result.transcript, result.words);
-          console.log(metricsObj);
           setMetrics(metricsObj);
         } catch (err) {
           setError(
-            `Could not decode or transcribe recording. Please try again. Error : ${err}`
+            `Could not decode or transcribe recording: ${
+              err instanceof Error ? err.message : "Unknown error"
+            }`
           );
+        } finally {
+          clearTimeout(timeout);
+          setIsLoading(false);
         }
 
-        // Stop media stream tracks to release mic
+        // Stop media stream tracks
         if (mediaRecorderRef.current?.stream) {
           mediaRecorderRef.current.stream.getTracks().forEach((t) => t.stop());
         }
@@ -393,12 +440,16 @@ const startRecording = async () => {
 
       mediaRecorderRef.current.start();
     } catch (err) {
-      alert(`Microphone permission denied or not available due ${err}`);
+      alert(
+        `Microphone permission denied: ${
+          err instanceof Error ? err.message : "Unknown error"
+        }`
+      );
       setRecording(false);
     }
   };
 
-const stopRecording = () => {
+  const stopRecording = () => {
     if (
       mediaRecorderRef.current &&
       mediaRecorderRef.current.state !== "inactive"
@@ -408,6 +459,19 @@ const stopRecording = () => {
     setRecording(false);
     setIsRunning(false);
   };
+
+  const minutes = Math.floor((time % 360000) / 6000);
+  const seconds = Math.floor((time % 6000) / 100);
+  const milliseconds = time % 100;
+
+  const sectionVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: { duration: 0.5, ease: "easeOut", staggerChildren: 0.2 },
+    },
+  } as const;
 
   return (
     <div className="bg-[#0A1E2E] min-h-screen flex items-center justify-center px-4">
@@ -440,29 +504,57 @@ const stopRecording = () => {
           {/* Question Section */}
           <div className="w-full md:w-1/2 p-8 sm:p-10 flex flex-col justify-between">
             <div>
-              <h2 className="text-2xl sm:text-3xl font-semibold text-black mb-6">
+              <h2 className="text-2xl sm:text-3xl font-semibold text-black mb-6 my-text">
                 {question[index]}
               </h2>
             </div>
             <div className="flex flex-row gap-5 align-end">
               <MotionButton
-                className="self-end mt-6 px-6 py-3 bg-black text-white rounded-full disabled:bg-transparent hover:bg-gray-800 transition-colors text-base sm:text-lg"
+                className={`self-end mt-6 px-6 py-3 bg-black text-white rounded-full hover:bg-gray-800 transition-colors text-base sm:text-lg ${
+                  isLoading || donerecorde
+                    ? "opacity-50 cursor-not-allowed disabled:bg-transparent"
+                    : ""
+                }`}
                 onClick={recording ? stopRecording : startRecording}
+                style={{ fontFamily: "MyFont" }}
                 variants={sectionVariants}
-                disabled={donerecorde}
+                disabled={isLoading || donerecorde}
               >
                 {recording ? "Stop" : "Start"}
               </MotionButton>
               <MotionButton
-                className="self-end mt-6 px-6 py-3 bg-black text-white rounded-full hover:bg-gray-800 transition-colors text-base sm:text-lg"
+                className={`self-end mt-6 px-6 py-3 bg-black text-white rounded-full hover:bg-gray-800 transition-colors text-base sm:text-lg disabled:bg-transparent disabled:cursor-not-allowed`}
                 onClick={index > 1 ? submit : handleStartAgain}
+                style={{ fontFamily: "MyFont" }}
                 variants={sectionVariants}
+                disabled={isLoading || !donerecorde}
               >
                 {index < 2 ? "Next" : "Finish"}
               </MotionButton>
             </div>
           </div>
         </MotionDiv>
+
+        {/* Full-Screen Loader */}
+        {isLoading && (
+          <MotionDiv
+            className="fixed inset-0 bg-black bg-opacity-50 flex flex-col items-center justify-center z-50"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3 }}
+          >
+            <PropagateLoader color="#00D4FF" size={15} speedMultiplier={1} />
+            <motion.span
+              className="mt-4 text-white text-lg"
+              key={currentPhraseIndex}
+              variants={phraseVariants}
+              initial="hidden"
+              animate="visible"
+            >
+              {phrases[currentPhraseIndex]}
+            </motion.span>
+          </MotionDiv>
+        )}
 
         {/* Audio Controls */}
         <div className="p-4">
@@ -483,45 +575,6 @@ const stopRecording = () => {
                   <p>
                     <b>Transcript:</b> {sttResult.transcript}
                   </p>
-                  <ul>
-                    {sttResult.words.map((w: STTWord, i: number) => (
-                      <li key={i}>
-                        {w.word}: {w.startTime.toFixed(2)}s -{" "}
-                        {w.endTime.toFixed(2)}s
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="mt-2">
-                    <h4 className="font-bold">IELTS Speaking Metrics:</h4>
-                    <ul className="text-sm">
-                      <li>Speech Rate: {metrics.speech_rate_wpm} wpm</li>
-                      <li>
-                        Articulation Rate: {metrics.articulation_rate_wpm} wpm
-                      </li>
-                      <li>
-                        Pauses: {metrics.pause_count}, Mean Pause:{" "}
-                        {metrics.mean_pause_duration}s
-                      </li>
-                      <li>Filler Words: {metrics.filler_word_count}</li>
-                      <li>Repetition Count: {metrics.repetition_count}</li>
-                      <li>
-                        Grammar Errors:
-                        {metrics.grammar_errors.length === 0 ? (
-                          " None"
-                        ) : (
-                          <ul className="ml-4 list-disc">
-                            {metrics.grammar_errors.map(
-                              (err: string, i: number) => (
-                                <li key={i}>{err}</li>
-                              )
-                            )}
-                          </ul>
-                        )}
-                      </li>
-                      <li>Vocabulary Richness: {metrics.vocab_richness}</li>
-                      <li>Duration: {metrics.duration_seconds}s</li>
-                    </ul>
-                  </div>
                 </div>
               )}
             </div>

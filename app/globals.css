@@ -1,5 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=Major+Mono+Display&display=swap');
-
+@font-face {
+  font-family: 'MyFont';
+  src: url('/Font/MajorMonoDisplay-Regular.ttf') format('truetype');
+}
 
 
 @import "tailwindcss";
@@ -29,8 +31,6 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-
-/* Define a class to apply the font */
-.major-mono-display {
-  font-family: 'Major Mono Display', monospace;
+.my-text {
+  font-family: 'Helvetica', 'Arial', sans-serif;
 }

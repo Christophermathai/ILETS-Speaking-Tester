@@ -153,6 +153,7 @@ Overall Band: X – [Summary and improvement advice]
       <MotionDiv
         className="flex flex-col md:flex-row bg-white rounded-xl shadow-2xl overflow-hidden w-full max-w-5xl"
         initial="hidden"
+        style={{ fontFamily: 'MyFont' }}
         animate="visible"
         variants={sectionVariants}
       >
@@ -163,13 +164,13 @@ Overall Band: X – [Summary and improvement advice]
           </h2>
           <p className="text-black text-lg">Your Results</p>
           {geminiResult ? (
-            <pre className="whitespace-pre-wrap text-black ">{geminiResult}</pre>
+            <pre className="whitespace-pre-wrap text-black my-text">{geminiResult}</pre>
           ) : (
-            <div className="flex flex-col items-center justify-center">
+            <div className="flex flex-col items-center justify-center" style={{ fontFamily: 'MyFont' }}>
               <div>
                 <PropagateLoader />
               </div>
-              <div>Evaluating your results with Gemini...</div>
+              <div className="mt-2">Evaluating your results with Gemini...</div>
             </div>
           )}
           
@@ -185,7 +186,7 @@ Overall Band: X – [Summary and improvement advice]
 
         {/* Right Side: Section Details */}
         <div
-          className="w-full md:w-1/2 p-10 flex flex-col items-center justify-start text-black"
+          className="w-full md:w-1/2 p-10 flex flex-col items-center justify-start text-black my-text"
           style={{
             backgroundImage: `url("data:image/svg+xml;utf8,${encodeURIComponent(
               patternSvg
